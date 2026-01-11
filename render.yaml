@@ -35,4 +35,3 @@ services:
 databases:
   - name: redis-queue-db
     plan: free
-    maxmemoryPolicy: noeviction

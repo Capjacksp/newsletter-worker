@@ -1,5 +1,14 @@
 const { Worker } = require('bullmq');
 const Redis = require('ioredis');
+const sql = require('./db/index.js');
+const OpenAI = require('openai');
+const dotenv = require('dotenv');
+
+dotenv.config();
+
+const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY
+});
 
 // Debug: Print environment variables
 console.log('=== Worker Environment Debug ===');
@@ -44,32 +53,65 @@ connection.on('connect', () => {
 const worker = new Worker('tasks', async (job) => {
     console.log(`Processing job ${job.id}`);
     console.log('Job data:', job.data);
-
+    const { username, prompt, model } = job.data;
+    console.log("processing job for user ", username, model)
+    const users = await sql`SELECT * FROM users WHERE username = ${username}`;
     try {
-        // Simulate task processing
-        await job.updateProgress(10);
-        console.log('Task started...');
 
-        // Your actual task logic here
-        const { data } = job.data;
+        const results = [];
 
-        // Simulate some work with progress updates
-        for (let i = 1; i <= 5; i++) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            await job.updateProgress(i * 20);
-            console.log(`Progress: ${i * 20}%`);
+        // Loop through each article and call LLM
+        for (const article of users[0].articles.data) {
+            try {
+                // Construct the prompt with article data and user's input_prompt
+                const articlePrompt = `${prompt}
+                 Article Data:
+                 Title: ${article.title}
+                 Source: ${article.source}
+                 Full Article Text: ${article.full_article_text.slice(0, 4000)}
+                 ${users[0].output_prompt}`;
+                console.log("processing article ", article.title);
+                // Call OpenAI for this article
+                const completion = await openai.chat.completions.create({
+                    model: model || 'gpt-5-nano',
+                    messages: [
+                        {
+                            role: 'system',
+                            content: 'You are a strategic analyst. Return only valid JSON.'
+                        },
+                        {
+                            role: 'user',
+                            content: articlePrompt
+                        }
+                    ],
+                });
+
+                const generatedContent = JSON.parse(completion.choices[0].message.content);
+                generatedContent.source = article.source;
+                generatedContent.title = article.title;
+                generatedContent.link = article.link;
+                generatedContent.publish_date = article.publish_date;
+                results.push(generatedContent);
+
+            } catch (articleErr) {
+                console.error(`Error processing article: ${article.title}`, articleErr);
+            }
         }
 
-        // Return result
-        const result = {
-            processed: true,
-            originalData: data,
-            processedAt: new Date().toISOString(),
-            message: 'Task completed successfully'
+        // Format the results for newsletter column
+        const newsletterData = {
+            "0": {
+                "data": results
+            }
         };
 
-        console.log(`Job ${job.id} completed`);
-        return result;
+        // Update the database with the results and set is_generating to false
+        await sql`
+            UPDATE users 
+            SET newsletter = ${newsletterData}, is_generating = false 
+            WHERE username = ${users[0].username}
+        `;
+
 
     } catch (error) {
         console.error(`Job ${job.id} failed:`, error);

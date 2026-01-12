@@ -55,15 +55,8 @@ app.get('/', (req, res) => {
 // Endpoint to add task to queue
 app.post('/api/task', async (req, res) => {
     try {
-        const { data } = req.body;
-
-        if (!data) {
-            return res.status(400).json({ error: 'Data is required' });
-        }
-
-        // Add job to queue
         const job = await taskQueue.add('process-task', {
-            data,
+            data: req.body,
             timestamp: new Date().toISOString()
         });
 

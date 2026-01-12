@@ -6,10 +6,25 @@ const app = express();
 app.use(express.json());
 
 // Redis connection - uses Railway Redis URL or local
-const connection = new Redis(process.env.REDIS_URL || {
-    host: 'localhost',
-    port: 6379,
-    maxRetriesPerRequest: null
+const redisConfig = process.env.REDIS_URL
+    ? process.env.REDIS_URL
+    : process.env.REDIS_PRIVATE_URL || 'redis://localhost:6379';
+
+const connection = new Redis(redisConfig, {
+    maxRetriesPerRequest: null,
+    enableReadyCheck: false,
+    retryStrategy: (times) => {
+        const delay = Math.min(times * 50, 2000);
+        return delay;
+    }
+});
+
+connection.on('error', (err) => {
+    console.error('Redis connection error:', err);
+});
+
+connection.on('connect', () => {
+    console.log('✓ Connected to Redis successfully');
 });
 
 // Create queue

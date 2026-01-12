@@ -5,12 +5,29 @@ const Redis = require('ioredis');
 const app = express();
 app.use(express.json());
 
-// Redis connection - uses Railway Redis URL or local
-const redisConfig = process.env.REDIS_URL
-    ? process.env.REDIS_URL
-    : process.env.REDIS_PRIVATE_URL || 'redis://localhost:6379';
+// Debug: Print environment variables
+console.log('=== Environment Debug ===');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('REDIS_URL exists:', !!process.env.REDIS_URL);
+console.log('REDIS_PRIVATE_URL exists:', !!process.env.REDIS_PRIVATE_URL);
+console.log('REDIS_PUBLIC_URL exists:', !!process.env.REDIS_PUBLIC_URL);
+console.log('========================');
 
-const connection = new Redis(redisConfig, {
+// Get Redis URL from environment
+const redisUrl = process.env.REDIS_URL ||
+    process.env.REDIS_PRIVATE_URL ||
+    process.env.REDIS_PUBLIC_URL;
+
+if (!redisUrl) {
+    console.error('❌ ERROR: No Redis URL found in environment variables!');
+    console.error('Please add Redis service to Railway and check variables.');
+    process.exit(1);
+}
+
+console.log('Using Redis URL:', redisUrl.replace(/:[^:]*@/, ':****@')); // Hide password
+
+// Redis connection
+const connection = new Redis(redisUrl, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
     retryStrategy: (times) => {
@@ -20,11 +37,11 @@ const connection = new Redis(redisConfig, {
 });
 
 connection.on('error', (err) => {
-    console.error('Redis connection error:', err);
+    console.error('❌ Redis connection error:', err.message);
 });
 
 connection.on('connect', () => {
-    console.log('✓ Connected to Redis successfully');
+    console.log('✅ Connected to Redis successfully');
 });
 
 // Create queue

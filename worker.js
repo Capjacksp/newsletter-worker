@@ -53,7 +53,7 @@ connection.on('connect', () => {
 const worker = new Worker('tasks', async (job) => {
     console.log(`Processing job ${job.id}`);
     console.log('Job data:', job.data);
-    const { username, prompt, model } = job.data;
+    const { username, prompt, model } = job.data.data;
     console.log("processing job for user ", username, model)
     const users = await sql`SELECT * FROM users WHERE username = ${username}`;
     try {

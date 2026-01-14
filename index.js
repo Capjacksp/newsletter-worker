@@ -46,6 +46,7 @@ connection.on('connect', () => {
 
 // Create queue
 const taskQueue = new Queue('tasks', { connection });
+const embeddingQueue = new Queue('embeddings', { connection });
 
 // Health check endpoint
 app.get('/', (req, res) => {
@@ -70,6 +71,28 @@ app.post('/api/task', async (req, res) => {
         res.status(500).json({ error: 'Failed to add task to queue' });
     }
 });
+
+// Endpoint to add embedding to queue
+app.post('/api/embedding', async (req, res) => {
+    const { username } = req.body;
+    try {
+        const job = await embeddingQueue.add('process-embedding', {
+            data: username,
+            timestamp: new Date().toISOString()
+        });
+
+        res.status(200).json({
+            success: true,
+            message: 'Embedding added to queue',
+            jobId: job.id
+        });
+    } catch (error) {
+        console.error('Error adding embedding to queue:', error);
+        res.status(500).json({ error: 'Failed to add embedding to queue' });
+    }
+});
+
+
 
 // Endpoint to check job status
 app.get('/api/task/:jobId', async (req, res) => {

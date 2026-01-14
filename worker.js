@@ -138,10 +138,60 @@ worker.on('active', (job) => {
 console.log('Worker started and waiting for jobs...');
 console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 
-// Graceful shutdown
+
+
+const embeddingWorker = new Worker('process-embedding', async (job) => {
+    console.log(`Processing job ${job.id}`);
+    console.log('Job data:', job.data);
+    const { username } = job.data;
+    console.log("processing job for articles ", username)
+    const articles = await sql`SELECT * FROM articles WHERE username = ${username} and embedding is null`;
+    try {
+        const results = [];
+        for (const article of articles) {
+            try {
+                const completion = await openai.embeddings.create({
+                    model: 'text-embedding-ada-002',
+                    input: article.title + ' ' + article.content,
+                });
+                results.push(completion.data[0].embedding);
+            } catch (articleErr) {
+                console.error(`Error processing article: ${article.title}`, articleErr);
+            }
+        }
+        await sql`
+            UPDATE articles 
+            SET embedding = ${results} 
+            WHERE username = ${username}
+        `;
+    } catch (error) {
+        console.error(`Job ${job.id} failed:`, error);
+        throw error;
+    }
+}, {
+    connection,
+    concurrency: 5 // Process up to 5 jobs concurrently
+});
+
+// Event listeners
+embeddingWorker.on('completed', (job) => {
+    console.log(`✓ Job ${job.id} has completed`);
+});
+
+embeddingWorker.on('failed', (job, err) => {
+    console.log(`✗ Job ${job.id} has failed with error: ${err.message}`);
+});
+
+embeddingWorker.on('active', (job) => {
+    console.log(`→ Job ${job.id} is now active`);
+});
+
+
+
 process.on('SIGTERM', async () => {
     console.log('SIGTERM received, shutting down worker gracefully');
     await worker.close();
+    await embeddingWorker.close();
     await connection.quit();
     process.exit(0);
 });

@@ -207,11 +207,11 @@ const similarityWorker = new Worker('similarity-search', async (job) => {
 
     const { username } = job.data;
     console.log(`Searching for user: ${username}`);
-    const userArticles = await sql`SELECT articles FROM users WHERE username = ${username}`;
+    const userArticles = await sql`SELECT * FROM users WHERE username = ${username}`;
 
     try {
 
-        for (const article of userArticles[0].data) {
+        for (const article of userArticles[0].articles.data) {
             // Step 1: Generate embedding for the search query
             console.log('📝 Generating embedding for query... for ' + article.title);
             const queryEmbedding = await openai.embeddings.create({

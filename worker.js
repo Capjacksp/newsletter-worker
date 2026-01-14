@@ -139,40 +139,53 @@ console.log('Worker started and waiting for jobs...');
 console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 
 
-
 const embeddingWorker = new Worker('process-embedding', async (job) => {
-    console.log(`Processing job ${job.id}`);
+    console.log(`Processing embedding job ${job.id}`);
     console.log('Job data:', job.data);
     const { username } = job.data;
-    console.log("processing job for articles ", username)
-    const articles = await sql`SELECT * FROM articles WHERE username = ${username} and embedding is null`;
+    console.log("Processing embeddings for user:", username);
+
+    const articles = await sql`SELECT * FROM articles WHERE username = ${username} AND embedding IS NULL`;
+
+    if (articles.length === 0) {
+        console.log('No articles without embeddings found');
+        return;
+    }
+
     try {
-        const results = [];
+        // Process each article individually
         for (const article of articles) {
             try {
+                console.log(`Generating embedding for article: ${article.title}`);
                 const completion = await openai.embeddings.create({
                     model: 'text-embedding-ada-002',
                     input: article.title + ' ' + article.content,
                 });
-                results.push(completion.data[0].embedding);
+
+                const embedding = completion.data[0].embedding;
+
+                // Update each article individually
+                await sql`
+                    UPDATE articles 
+                    SET embedding = ${embedding} 
+                    WHERE id = ${article.id}
+                `;
+
+                console.log(`✓ Embedding saved for article: ${article.title}`);
             } catch (articleErr) {
                 console.error(`Error processing article: ${article.title}`, articleErr);
             }
         }
-        await sql`
-            UPDATE articles 
-            SET embedding = ${results} 
-            WHERE username = ${username}
-        `;
+
+        console.log(`✓ Completed processing ${articles.length} articles`);
     } catch (error) {
         console.error(`Job ${job.id} failed:`, error);
         throw error;
     }
 }, {
     connection,
-    concurrency: 5 // Process up to 5 jobs concurrently
+    concurrency: 5
 });
-
 // Event listeners
 embeddingWorker.on('completed', (job) => {
     console.log(`✓ Job ${job.id} has completed`);

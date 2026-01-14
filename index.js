@@ -72,15 +72,13 @@ app.post('/api/task', async (req, res) => {
     }
 });
 
-// Endpoint to add embedding to queue
 app.post('/api/embedding', async (req, res) => {
     const { username } = req.body;
     try {
         const job = await embeddingQueue.add('process-embedding', {
-            data: username,
+            username: username,  // Changed from data: username
             timestamp: new Date().toISOString()
         });
-
         res.status(200).json({
             success: true,
             message: 'Embedding added to queue',
@@ -91,7 +89,6 @@ app.post('/api/embedding', async (req, res) => {
         res.status(500).json({ error: 'Failed to add embedding to queue' });
     }
 });
-
 
 
 // Endpoint to check job status
@@ -131,6 +128,7 @@ app.listen(PORT, () => {
 process.on('SIGTERM', async () => {
     console.log('SIGTERM received, shutting down gracefully');
     await taskQueue.close();
+    await embeddingQueue.close();
     await connection.quit();
     process.exit(0);
 });

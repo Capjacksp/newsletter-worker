@@ -200,11 +200,80 @@ embeddingWorker.on('active', (job) => {
 });
 
 
+// Similarity Search Worker
+const similarityWorker = new Worker('similarity-search', async (job) => {
+    console.log(`🔍 Processing similarity search job ${job.id}`);
+    console.log('Job data:', job.data);
 
+    const { username } = job.data;
+    console.log(`Searching for user: ${username}`);
+    const userArticles = await sql`SELECT articles FROM users WHERE username = ${username}`;
+
+    try {
+
+        for (const article of userArticles.data) {
+            // Step 1: Generate embedding for the search query
+            console.log('📝 Generating embedding for query... for ' + article.title);
+            const queryEmbedding = await openai.embeddings.create({
+                model: 'text-embedding-ada-002',
+                input: article.title + ' ' + article.full_article_text,
+            });
+
+            const queryVector = queryEmbedding.data[0].embedding;
+            const queryVectorString = `[${queryVector.join(',')}]`;
+
+            console.log('✅ Query embedding generated');
+
+            // Step 2: Get all articles with embeddings for this user
+            console.log('📚 Fetching articles from database...');
+            const articles = await sql`
+            SELECT 
+                id,
+                article_title,
+                embedding,
+                (1 - (embedding <=> ${queryVectorString}::vector)) as similarity_score
+            FROM articles 
+            WHERE username = ${username} 
+            AND embedding IS NOT NULL and article_title != ${article.title} 
+            ORDER BY embedding <=> ${queryVectorString}::vector
+        `;
+
+            console.log(`Found ${articles} articles`);
+
+        }
+
+
+    } catch (error) {
+        console.error(`❌ Similarity search job ${job.id} failed:`, error);
+        throw error;
+    }
+}, {
+    connection,
+    concurrency: 3  // Process up to 3 similarity searches concurrently
+});
+
+// Event listeners
+similarityWorker.on('completed', (job, result) => {
+    console.log(`✅ Similarity search job ${job.id} completed`);
+    console.log(`   Found ${result.total_results} similar articles`);
+});
+
+similarityWorker.on('failed', (job, err) => {
+    console.error(`❌ Similarity search job ${job.id} failed: ${err.message}`);
+});
+
+similarityWorker.on('active', (job) => {
+    console.log(`🔄 Similarity search job ${job.id} is now active`);
+});
+
+console.log('✅ Similarity search worker started and waiting for jobs...');
+
+// Update graceful shutdown
 process.on('SIGTERM', async () => {
     console.log('SIGTERM received, shutting down worker gracefully');
     await worker.close();
     await embeddingWorker.close();
+    await similarityWorker.close();  // Add this
     await connection.quit();
     process.exit(0);
 });

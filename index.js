@@ -47,7 +47,7 @@ connection.on('connect', () => {
 // Create queue
 const taskQueue = new Queue('tasks', { connection });
 const embeddingQueue = new Queue('process-embedding', { connection });
-
+const similarityQueue = new Queue('similarity-search', { connection });
 // Health check endpoint
 app.get('/', (req, res) => {
     res.json({ status: 'Server is running' });
@@ -117,6 +117,86 @@ app.get('/api/task/:jobId', async (req, res) => {
     }
 });
 
+
+
+
+// Endpoint for similarity search
+app.post('/api/similarity-search', async (req, res) => {
+    const { username } = req.body;
+
+    if (!username) {
+        return res.status(400).json({
+            error: 'Username is required'
+        });
+    }
+
+    console.log('🔍 Received similarity search request');
+    console.log('Username:', username);
+
+    try {
+        const job = await similarityQueue.add('search', {
+            username: username,
+            timestamp: new Date().toISOString()
+        });
+
+        console.log('✅ Similarity search job added to queue:', job.id);
+
+        res.status(200).json({
+            success: true,
+            message: 'Similarity search job added to queue',
+            jobId: job.id
+        });
+    } catch (error) {
+        console.error('❌ Error adding similarity search to queue:', error);
+        res.status(500).json({ error: 'Failed to add similarity search to queue' });
+    }
+});
+
+// Endpoint to get similarity search results
+app.get('/api/similarity-search/:jobId', async (req, res) => {
+    try {
+        const { jobId } = req.params;
+        const job = await similarityQueue.getJob(jobId);
+
+        if (!job) {
+            return res.status(404).json({ error: 'Job not found' });
+        }
+
+        const state = await job.getState();
+
+        if (state === 'completed') {
+            res.status(200).json({
+                jobId: job.id,
+                state,
+                results: job.returnvalue
+            });
+        } else if (state === 'failed') {
+            res.status(500).json({
+                jobId: job.id,
+                state,
+                error: job.failedReason
+            });
+        } else {
+            res.status(200).json({
+                jobId: job.id,
+                state,
+                message: 'Job is still processing'
+            });
+        }
+    } catch (error) {
+        console.error('Error fetching similarity search status:', error);
+        res.status(500).json({ error: 'Failed to fetch job status' });
+    }
+});
+
+
+
+
+
+
+
+
+
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
@@ -129,6 +209,7 @@ process.on('SIGTERM', async () => {
     console.log('SIGTERM received, shutting down gracefully');
     await taskQueue.close();
     await embeddingQueue.close();
+    await similarityQueue.close();
     await connection.quit();
     process.exit(0);
 });

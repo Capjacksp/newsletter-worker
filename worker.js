@@ -228,9 +228,7 @@ const similarityWorker = new Worker('similarity-search', async (job) => {
             console.log('📚 Fetching articles from database...');
             const articles = await sql`
             SELECT 
-                id,
                 article_title,
-                embedding,
                 (1 - (embedding <=> ${queryVectorString}::vector)) as similarity_score
             FROM articles 
             WHERE username = ${username} 
@@ -238,7 +236,7 @@ const similarityWorker = new Worker('similarity-search', async (job) => {
             ORDER BY embedding <=> ${queryVectorString}::vector
         `;
 
-            console.log(`Found ${articles} articles`);
+            console.log("Found articles:", JSON.stringify(articles, null, 2));
 
         }
 
@@ -253,9 +251,8 @@ const similarityWorker = new Worker('similarity-search', async (job) => {
 });
 
 // Event listeners
-similarityWorker.on('completed', (job, result) => {
+similarityWorker.on('completed', (job) => {
     console.log(`✅ Similarity search job ${job.id} completed`);
-    console.log(`   Found ${result.total_results} similar articles`);
 });
 
 similarityWorker.on('failed', (job, err) => {

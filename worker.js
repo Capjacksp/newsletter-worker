@@ -156,10 +156,10 @@ const embeddingWorker = new Worker('process-embedding', async (job) => {
         // Process each article individually
         for (const article of articles) {
             try {
-                console.log(`Generating embedding for article: ${article.title}`);
+                console.log(`Generating embedding for article: ${article.article_title}`);
                 const completion = await openai.embeddings.create({
                     model: 'text-embedding-ada-002',
-                    input: article.title + ' ' + article.content,
+                    input: article.article_title + ' ' + article.article_content,
                 });
 
                 const embedding = completion.data[0].embedding;
@@ -171,9 +171,9 @@ const embeddingWorker = new Worker('process-embedding', async (job) => {
                     WHERE id = ${article.id}
                 `;
 
-                console.log(`✓ Embedding saved for article: ${article.title}`);
+                console.log(`✓ Embedding saved for article: ${article.article_title}`);
             } catch (articleErr) {
-                console.error(`Error processing article: ${article.title}`, articleErr);
+                console.error(`Error processing article: ${article.article_title}`, articleErr);
             }
         }
 

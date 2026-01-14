@@ -228,13 +228,15 @@ const similarityWorker = new Worker('similarity-search', async (job) => {
             console.log('📚 Fetching articles from database...');
             const articles = await sql`
             SELECT 
-                article_title,
-                (1 - (embedding <=> ${queryVectorString}::vector)) as similarity_score
-            FROM articles 
-            WHERE username = ${username} 
-            AND embedding IS NOT NULL and article_title != ${article.title} 
-            ORDER BY embedding <=> ${queryVectorString}::vector
-        `;
+              article_title,
+              1 - (embedding <=> ${queryVectorString}::vector) AS cosine_similarity
+            FROM articles
+            WHERE username = ${username}
+              AND embedding IS NOT NULL
+              AND article_title != ${article.title}
+            ORDER BY cosine_similarity DESC
+            Limit 3;
+            `;
 
             console.log("Found articles:", JSON.stringify(articles, null, 2));
 

@@ -46,7 +46,7 @@ connection.on('connect', () => {
 
 // Create queue
 const taskQueue = new Queue('tasks', { connection });
-const embeddingQueue = new Queue('embeddings', { connection });
+const embeddingQueue = new Queue('process-embedding', { connection });
 
 // Health check endpoint
 app.get('/', (req, res) => {

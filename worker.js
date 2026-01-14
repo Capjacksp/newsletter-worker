@@ -211,7 +211,7 @@ const similarityWorker = new Worker('similarity-search', async (job) => {
 
     try {
 
-        for (const article of userArticles.data) {
+        for (const article of userArticles[0].data) {
             // Step 1: Generate embedding for the search query
             console.log('📝 Generating embedding for query... for ' + article.title);
             const queryEmbedding = await openai.embeddings.create({

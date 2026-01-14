@@ -163,14 +163,14 @@ const embeddingWorker = new Worker('process-embedding', async (job) => {
                 });
 
                 const embedding = completion.data[0].embedding;
+                const embeddingString = `[${embedding.join(',')}]`;
 
-                // Update each article individually
+                // Update with the properly formatted string
                 await sql`
                     UPDATE articles 
-                    SET embedding = ${embedding} 
+                    SET embedding = ${embeddingString}::vector
                     WHERE id = ${article.id}
                 `;
-
                 console.log(`✓ Embedding saved for article: ${article.article_title}`);
             } catch (articleErr) {
                 console.error(`Error processing article: ${article.article_title}`, articleErr);
